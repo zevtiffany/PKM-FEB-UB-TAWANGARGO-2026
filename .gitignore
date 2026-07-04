@@ -1,0 +1,21 @@
+# Dependensi
+node_modules/
+
+# Build
+.next/
+out/
+
+# Environment
+.env.local
+.env
+
+# Database SQLite
+prisma/dev.db
+prisma/dev.db-journal
+
+# Upload files (foto dari admin, jangan di-commit)
+public/uploads/
+
+# Misc
+.DS_Store
+*.log
