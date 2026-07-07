@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import path from 'path'
-import fs from 'fs'
+import { supabaseAdmin, STORAGE_BUCKET } from '@/lib/supabase'
 
 // POST: Upload foto untuk kegiatan
 export async function POST(req: NextRequest) {
@@ -20,9 +19,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'kegiatanId dan foto wajib diisi' }, { status: 400 })
   }
 
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads')
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
-
   const savedFotos = []
 
   for (const file of files) {
@@ -31,13 +27,29 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     const ext = file.name.split('.').pop() ?? 'jpg'
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const filePath = path.join(uploadDir, filename)
+    const storagePath = `kegiatan/${kegiatanId}/${filename}`
 
-    fs.writeFileSync(filePath, buffer)
+    // Upload ke Supabase Storage
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .upload(storagePath, buffer, {
+        contentType: file.type,
+        upsert: false,
+      })
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError)
+      continue
+    }
+
+    // Ambil public URL
+    const { data: urlData } = supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(storagePath)
 
     const foto = await prisma.foto.create({
       data: {
-        url: `/uploads/${filename}`,
+        url: urlData.publicUrl,
         keterangan: keterangan ?? null,
         kegiatanId,
       },
@@ -59,10 +71,17 @@ export async function DELETE(req: NextRequest) {
   const foto = await prisma.foto.findUnique({ where: { id } })
   if (!foto) return NextResponse.json({ error: 'Foto tidak ditemukan' }, { status: 404 })
 
+  // Hapus dari Supabase Storage
   try {
-    const filePath = path.join(process.cwd(), 'public', foto.url)
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-  } catch {}
+    const supabaseUrl = process.env.SUPABASE_URL!
+    const bucketPublicPrefix = `${supabaseUrl}/storage/v1/object/public/${STORAGE_BUCKET}/`
+    if (foto.url.startsWith(bucketPublicPrefix)) {
+      const storagePath = foto.url.replace(bucketPublicPrefix, '')
+      await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([storagePath])
+    }
+  } catch (e) {
+    console.error('Delete storage error:', e)
+  }
 
   await prisma.foto.delete({ where: { id } })
   return NextResponse.json({ ok: true })
