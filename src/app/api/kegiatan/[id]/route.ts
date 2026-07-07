@@ -1,20 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { db, bucket, COLLECTIONS } from '@/lib/firebase'
 import { getSession } from '@/lib/auth'
-import path from 'path'
-import fs from 'fs'
 
 type Params = { params: { id: string } }
 
 // GET single kegiatan
 export async function GET(_req: NextRequest, { params }: Params) {
-  const id = parseInt(params.id)
-  const kegiatan = await prisma.kegiatan.findUnique({
-    where: { id },
-    include: { foto: true },
-  })
-  if (!kegiatan) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(kegiatan)
+  try {
+    const doc = await db.collection(COLLECTIONS.KEGIATAN).doc(params.id).get()
+    if (!doc.exists) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    // Ambil subcollection foto
+    const fotoSnapshot = await db
+      .collection(COLLECTIONS.KEGIATAN)
+      .doc(params.id)
+      .collection(COLLECTIONS.FOTO)
+      .get()
+
+    const foto = fotoSnapshot.docs.map((f) => ({ id: f.id, ...f.data() }))
+
+    return NextResponse.json({ id: doc.id, ...doc.data(), foto })
+  } catch (error) {
+    console.error('GET kegiatan/[id] error:', error)
+    return NextResponse.json({ error: 'Gagal mengambil data' }, { status: 500 })
+  }
 }
 
 // PUT update kegiatan
@@ -24,40 +35,63 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const id = parseInt(params.id)
-  const body = await req.json()
-  const { judul, tanggal, deskripsi, kategori } = body
+  try {
+    const body = await req.json()
+    const { judul, tanggal, deskripsi, kategori } = body
 
-  const kegiatan = await prisma.kegiatan.update({
-    where: { id },
-    data: {
+    const data = {
       judul,
-      tanggal: new Date(tanggal),
+      tanggal,
       deskripsi,
       kategori,
-    },
-  })
-  return NextResponse.json(kegiatan)
+      updatedAt: new Date().toISOString(),
+    }
+
+    await db.collection(COLLECTIONS.KEGIATAN).doc(params.id).update(data)
+    return NextResponse.json({ id: params.id, ...data })
+  } catch (error) {
+    console.error('PUT kegiatan/[id] error:', error)
+    return NextResponse.json({ error: 'Gagal mengupdate data' }, { status: 500 })
+  }
 }
 
-// DELETE kegiatan + cascade photos
+// DELETE kegiatan + semua foto dari Storage
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const session = await getSession()
   if (!session?.isLoggedIn) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const id = parseInt(params.id)
+  try {
+    const kegiatanId = params.id
 
-  // Get photos to delete files
-  const fotos = await prisma.foto.findMany({ where: { kegiatanId: id } })
-  for (const foto of fotos) {
-    try {
-      const filePath = path.join(process.cwd(), 'public', foto.url)
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-    } catch {}
+    // Ambil semua foto dari subcollection
+    const fotoSnapshot = await db
+      .collection(COLLECTIONS.KEGIATAN)
+      .doc(kegiatanId)
+      .collection(COLLECTIONS.FOTO)
+      .get()
+
+    // Hapus file dari Firebase Storage + dokumen foto
+    await Promise.all(
+      fotoSnapshot.docs.map(async (fotoDoc) => {
+        const fotoData = fotoDoc.data()
+        if (fotoData.storagePath) {
+          try {
+            await bucket.file(fotoData.storagePath).delete()
+          } catch {
+            // Lanjutkan meski file tidak ada
+          }
+        }
+        await fotoDoc.ref.delete()
+      })
+    )
+
+    // Hapus dokumen kegiatan
+    await db.collection(COLLECTIONS.KEGIATAN).doc(kegiatanId).delete()
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('DELETE kegiatan/[id] error:', error)
+    return NextResponse.json({ error: 'Gagal menghapus data' }, { status: 500 })
   }
-
-  await prisma.kegiatan.delete({ where: { id } })
-  return NextResponse.json({ ok: true })
 }

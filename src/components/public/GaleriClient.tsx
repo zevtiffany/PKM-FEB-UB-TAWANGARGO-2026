@@ -4,25 +4,26 @@ import { useState } from 'react'
 import Image from 'next/image'
 
 interface FotoItem {
-  id: number
+  id: string
   url: string
   keterangan: string | null
-  kegiatanId: number
-  kegiatan: { id: number; judul: string }
+  kegiatanId: string
+  kegiatan: { id: string; judul: string }
 }
 
 interface GaleriClientProps {
   fotos: FotoItem[]
-  kegiatan: { id: number; judul: string }[]
+  kegiatan: { id: string; judul: string }[]
 }
 
 export default function GaleriClient({ fotos, kegiatan }: GaleriClientProps) {
-  const [filterKegiatan, setFilterKegiatan] = useState<number | null>(null)
+  const [filterKegiatan, setFilterKegiatan] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<FotoItem | null>(null)
 
   const filtered = filterKegiatan
     ? fotos.filter((f) => f.kegiatanId === filterKegiatan)
     : fotos
+
 
   return (
     <>

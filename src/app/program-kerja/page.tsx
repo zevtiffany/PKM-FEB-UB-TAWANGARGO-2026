@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { db, COLLECTIONS } from '@/lib/firebase'
 import Image from 'next/image'
 import ScrollReveal from '@/components/public/ScrollReveal'
 
@@ -9,6 +9,21 @@ export const metadata = {
   title: 'Program Kerja | KKN Desa Tawangargo',
   description:
     'Daftar lengkap program kerja KKN di Desa Tawangargo — timeline kegiatan, deskripsi, dan dokumentasi foto.',
+}
+
+interface Foto {
+  id: string
+  url: string
+  keterangan: string | null
+}
+
+interface Kegiatan {
+  id: string
+  judul: string
+  tanggal: string
+  deskripsi: string
+  kategori: string
+  foto: Foto[]
 }
 
 const KATEGORI_COLORS: Record<string, string> = {
@@ -22,12 +37,22 @@ const KATEGORI_COLORS: Record<string, string> = {
 }
 
 export default async function ProgramKerjaPage() {
-  const kegiatan = await prisma.kegiatan.findMany({
-    orderBy: { tanggal: 'asc' },
-    include: { foto: true },
-  })
+  const kegiatanSnap = await db.collection(COLLECTIONS.KEGIATAN).orderBy('tanggal', 'asc').get()
+  const kegiatan = await Promise.all(
+    kegiatanSnap.docs.map(async (doc) => {
+      const fotoSnap = await db
+        .collection(COLLECTIONS.KEGIATAN)
+        .doc(doc.id)
+        .collection(COLLECTIONS.FOTO)
+        .get()
+      const foto: Foto[] = fotoSnap.docs.map((f) => ({ id: f.id, ...f.data() } as Foto))
+      return { id: doc.id, ...doc.data(), foto } as Kegiatan
+    })
+  )
 
-  const allKategori = [...new Set(kegiatan.map((k) => k.kategori))]
+
+
+  const allKategori = Array.from(new Set(kegiatan.map((k) => k.kategori)))
 
   return (
     <div className="min-h-screen pt-24 pb-20">

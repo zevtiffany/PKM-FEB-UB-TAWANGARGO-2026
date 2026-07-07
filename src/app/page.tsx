@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { db, COLLECTIONS } from '@/lib/firebase'
 import Image from 'next/image'
 import Link from 'next/link'
 import ScrollReveal from '@/components/public/ScrollReveal'
@@ -6,20 +6,68 @@ import ScrollReveal from '@/components/public/ScrollReveal'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+interface InfoDesa {
+  id: string
+  nama: string
+  kecamatan: string
+  kabupaten: string
+  deskripsi: string
+  jumlahDusun: number
+  namaaDusun: string
+  jumlahPenduduk: number
+  mayoritas: string
+  komoditas: string
+  dikenal: string
+  emailKontak: string
+  waKontak: string
+  periodeMulai: string | null
+  periodeSelesai: string | null
+}
+
 export default async function BerandaPage() {
-  const [infoDesa, kegiatanTerbaru, fotoTerbaru] = await Promise.all([
-    prisma.infoDesa.findFirst({ where: { id: 1 } }),
-    prisma.kegiatan.findMany({
-      orderBy: { tanggal: 'desc' },
-      take: 3,
-      include: { foto: { take: 1 } },
-    }),
-    prisma.foto.findMany({
-      orderBy: { id: 'desc' },
-      take: 6,
-      include: { kegiatan: { select: { judul: true } } },
-    }),
+  // Ambil data dari Firestore
+  const [infoDoc, kegiatanSnapshot] = await Promise.all([
+    db.collection(COLLECTIONS.INFO_DESA).doc('main').get(),
+    db.collection(COLLECTIONS.KEGIATAN).orderBy('tanggal', 'desc').limit(3).get(),
   ])
+
+  const infoDesa = infoDoc.exists ? { id: infoDoc.id, ...infoDoc.data() } as InfoDesa : null
+
+  // Ambil kegiatan + foto masing-masing
+  const kegiatanTerbaru = await Promise.all(
+    kegiatanSnapshot.docs.map(async (doc) => {
+      const fotoSnap = await db
+        .collection(COLLECTIONS.KEGIATAN)
+        .doc(doc.id)
+        .collection(COLLECTIONS.FOTO)
+        .limit(1)
+        .get()
+      const foto = fotoSnap.docs.map((f) => ({ id: f.id, ...f.data() }))
+      return { id: doc.id, ...doc.data(), foto } as any
+    })
+  )
+
+  // Ambil 6 foto terbaru dari semua kegiatan
+  const allKegiatanSnap = await db.collection(COLLECTIONS.KEGIATAN).get()
+  const fotoTerbaru: any[] = []
+  for (const kegDoc of allKegiatanSnap.docs) {
+    if (fotoTerbaru.length >= 6) break
+    const fSnap = await db
+      .collection(COLLECTIONS.KEGIATAN)
+      .doc(kegDoc.id)
+      .collection(COLLECTIONS.FOTO)
+      .limit(6 - fotoTerbaru.length)
+      .get()
+    fSnap.docs.forEach((f) =>
+      fotoTerbaru.push({
+        id: f.id,
+        ...f.data(),
+        kegiatan: { judul: (kegDoc.data() as any).judul },
+      })
+    )
+  }
+
+
 
   const stats = [
     { label: 'Dusun', value: infoDesa?.jumlahDusun ?? 6, icon: '🏘️' },
@@ -155,7 +203,7 @@ export default async function BerandaPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {infoDesa?.namaaDusun.split(',').map((d) => (
+                  {infoDesa?.namaaDusun.split(',').map((d: string) => (
                     <span
                       key={d}
                       className="px-3 py-1.5 bg-green-50 text-green-800 text-sm rounded-xl border border-green-100 font-medium"
@@ -182,7 +230,7 @@ export default async function BerandaPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {infoDesa?.komoditas.split(',').map((k) => (
+                  {infoDesa?.komoditas.split(',').map((k: string) => (
                     <span
                       key={k}
                       className="px-3 py-1.5 bg-orange-50 text-orange-800 text-sm rounded-xl border border-orange-100 font-medium"

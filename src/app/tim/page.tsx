@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { db, COLLECTIONS } from '@/lib/firebase'
 import TimGrid from '@/components/public/TimGrid'
 
 export const dynamic = 'force-dynamic'
@@ -10,9 +10,9 @@ export const metadata = {
 }
 
 export default async function TimPage() {
-  const anggota = await prisma.anggota.findMany({
-    orderBy: { urutan: 'asc' },
-  })
+  const snapshot = await db.collection(COLLECTIONS.ANGGOTA).orderBy('urutan', 'asc').get()
+  const anggota = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as any[]
+
 
   return (
     <div className="min-h-screen pt-24 pb-20">

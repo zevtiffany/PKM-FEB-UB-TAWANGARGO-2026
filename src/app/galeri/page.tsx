@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { db, COLLECTIONS } from '@/lib/firebase'
 import GaleriClient from '@/components/public/GaleriClient'
 
 export const dynamic = 'force-dynamic'
@@ -9,17 +9,44 @@ export const metadata = {
   description: 'Dokumentasi foto seluruh kegiatan KKN di Desa Tawangargo.',
 }
 
+interface FotoItem {
+  id: string
+  url: string
+  keterangan: string | null
+  kegiatanId: string
+  kegiatan: { id: string; judul: string }
+}
+
 export default async function GaleriPage() {
-  const [fotos, kegiatan] = await Promise.all([
-    prisma.foto.findMany({
-      orderBy: { id: 'desc' },
-      include: { kegiatan: { select: { id: true, judul: true } } },
-    }),
-    prisma.kegiatan.findMany({
-      orderBy: { tanggal: 'asc' },
-      select: { id: true, judul: true },
-    }),
-  ])
+  const kegiatanSnap = await db.collection(COLLECTIONS.KEGIATAN).orderBy('tanggal', 'asc').get()
+  const kegiatan = kegiatanSnap.docs.map((doc) => {
+    const data = doc.data() as { judul: string }
+    return { id: doc.id, judul: data.judul }
+  })
+
+  // Ambil semua foto dari semua kegiatan
+  const fotos: FotoItem[] = []
+  await Promise.all(
+    kegiatanSnap.docs.map(async (kegDoc) => {
+      const kegData = kegDoc.data() as { judul: string }
+      const fSnap = await db
+        .collection(COLLECTIONS.KEGIATAN)
+        .doc(kegDoc.id)
+        .collection(COLLECTIONS.FOTO)
+        .get()
+      fSnap.docs.forEach((f) => {
+        const fData = f.data() as { url: string; keterangan?: string | null; kegiatanId?: string }
+        fotos.push({
+          id: f.id,
+          url: fData.url,
+          keterangan: fData.keterangan ?? null,
+          kegiatanId: fData.kegiatanId ?? kegDoc.id,
+          kegiatan: { id: kegDoc.id, judul: kegData.judul },
+        })
+      })
+    })
+  )
+
 
   return (
     <div className="min-h-screen pt-24 pb-20">

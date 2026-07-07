@@ -4,13 +4,13 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
 interface Foto {
-  id: number
+  id: string
   url: string
   keterangan: string | null
 }
 
 interface Kegiatan {
-  id: number
+  id: string
   judul: string
   tanggal: string
   deskripsi: string
@@ -41,13 +41,13 @@ export default function AdminKegiatanPage() {
   const [kegiatan, setKegiatan] = useState<Kegiatan[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [editId, setEditId] = useState<number | null>(null)
+  const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
-  const [uploadingId, setUploadingId] = useState<number | null>(null)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const showMsg = (type: 'success' | 'error', text: string) => {
@@ -113,7 +113,7 @@ export default function AdminKegiatanPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Hapus kegiatan ini beserta semua fotonya?')) return
     const res = await fetch(`/api/kegiatan/${id}`, { method: 'DELETE' })
     if (res.ok) {
@@ -122,12 +122,12 @@ export default function AdminKegiatanPage() {
     }
   }
 
-  const handleDeleteFoto = async (fotoId: number) => {
+  const handleDeleteFoto = async (fotoId: string, kegiatanId: string) => {
     if (!confirm('Hapus foto ini?')) return
     const res = await fetch('/api/upload', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: fotoId }),
+      body: JSON.stringify({ id: fotoId, kegiatanId }),
     })
     if (res.ok) {
       showMsg('success', 'Foto berhasil dihapus!')
@@ -135,7 +135,7 @@ export default function AdminKegiatanPage() {
     }
   }
 
-  const handleUploadFoto = async (kegiatanId: number) => {
+  const handleUploadFoto = async (kegiatanId: string) => {
     if (selectedFiles.length === 0) return
     setUploadingId(kegiatanId)
     const fd = new FormData()
@@ -345,7 +345,7 @@ export default function AdminKegiatanPage() {
                         <div key={f.id} className="relative group aspect-square rounded-xl overflow-hidden">
                           <Image src={f.url} alt={f.keterangan ?? 'foto'} fill className="object-cover" />
                           <button
-                            onClick={() => handleDeleteFoto(f.id)}
+                            onClick={() => handleDeleteFoto(f.id, k.id)}
                             className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center font-bold"
                           >
                             ×

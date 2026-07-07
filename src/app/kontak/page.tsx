@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { db, COLLECTIONS } from '@/lib/firebase'
 import ScrollReveal from '@/components/public/ScrollReveal'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,10 @@ export const metadata = {
 }
 
 export default async function KontakPage() {
-  const infoDesa = await prisma.infoDesa.findFirst({ where: { id: 1 } })
+  const infoDoc = await db.collection(COLLECTIONS.INFO_DESA).doc('main').get()
+  const infoDesa = infoDoc.exists ? (infoDoc.data() as any) : null
+
+
 
   return (
     <div className="min-h-screen pt-24 pb-20">

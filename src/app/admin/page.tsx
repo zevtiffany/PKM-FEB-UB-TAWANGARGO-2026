@@ -1,20 +1,44 @@
-import { prisma } from '@/lib/prisma'
+import { db, COLLECTIONS } from '@/lib/firebase'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminDashboard() {
-  const [kegiatanCount, fotoCount, anggotaCount] = await Promise.all([
-    prisma.kegiatan.count(),
-    prisma.foto.count(),
-    prisma.anggota.count(),
+  const [kegiatanSnap, anggotaSnap] = await Promise.all([
+    db.collection(COLLECTIONS.KEGIATAN).orderBy('createdAt', 'desc').get(),
+    db.collection(COLLECTIONS.ANGGOTA).get(),
   ])
 
-  const recentKegiatan = await prisma.kegiatan.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    include: { foto: { take: 1 } },
-  })
+  const kegiatanCount = kegiatanSnap.size
+  const anggotaCount = anggotaSnap.size
+
+  // Hitung total foto dari semua kegiatan
+  let fotoCount = 0
+  await Promise.all(
+    kegiatanSnap.docs.map(async (doc) => {
+      const fSnap = await db
+        .collection(COLLECTIONS.KEGIATAN)
+        .doc(doc.id)
+        .collection(COLLECTIONS.FOTO)
+        .get()
+      fotoCount += fSnap.size
+    })
+  )
+
+  // 5 kegiatan terbaru + 1 foto
+  const recentKegiatan = await Promise.all(
+    kegiatanSnap.docs.slice(0, 5).map(async (doc) => {
+      const fSnap = await db
+        .collection(COLLECTIONS.KEGIATAN)
+        .doc(doc.id)
+        .collection(COLLECTIONS.FOTO)
+        .limit(1)
+        .get()
+      return { id: doc.id, ...doc.data(), foto: fSnap.docs.map((f) => ({ id: f.id, ...f.data() })) } as any
+    })
+  )
+
+
 
   const stats = [
     {

@@ -4,13 +4,14 @@ import Image from 'next/image'
 import ScrollReveal from '@/components/public/ScrollReveal'
 
 interface Anggota {
-  id: number
+  id: string
   nama: string
   peran: string
   foto: string | null
   kontak: string | null
   urutan: number
 }
+
 
 export default function TimGrid({ anggota }: { anggota: Anggota[] }) {
   if (anggota.length === 0) {

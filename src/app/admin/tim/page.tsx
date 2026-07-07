@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
 interface Anggota {
-  id: number
+  id: string
   nama: string
   peran: string
   foto: string | null
@@ -18,7 +18,7 @@ export default function AdminTimPage() {
   const [anggota, setAnggota] = useState<Anggota[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [editId, setEditId] = useState<number | null>(null)
+  const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [fotoFile, setFotoFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
@@ -79,7 +79,7 @@ export default function AdminTimPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Hapus anggota ini?')) return
     const res = await fetch(`/api/tim/${id}`, { method: 'DELETE' })
     if (res.ok) {

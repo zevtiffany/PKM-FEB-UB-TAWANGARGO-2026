@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 
 interface InfoDesa {
-  id: number
+  id: string
+
   nama: string
   kecamatan: string
   kabupaten: string
